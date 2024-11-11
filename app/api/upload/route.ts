@@ -17,7 +17,10 @@ const s3Client = new S3Client({
     accessKeyId: awsAccessID,
     secretAccessKey: awsSecretID,
   },
+  useAccelerateEndpoint: true,
+  logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }, // Disable SDK logging
 });
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -36,13 +39,17 @@ export async function POST(request: Request) {
         Body: file,
         ContentType: file.type,
       },
+      // Optimize multipart upload
+      partSize: 10 * 1024 * 1024, // Increased to 10MB parts for faster uploads
+      queueSize: 8, // Increased concurrent uploads
+      leavePartsOnError: false,
     });
 
     await upload.done();
 
     return NextResponse.json({
       message: "Upload successful",
-      url: `https://${awsBucket}.s3.${awsRegion}.amazonaws.com/${key}`,
+      url: `https://${awsBucket}.s3-accelerate.amazonaws.com/${key}`,
     });
   } catch (error) {
     console.error("Upload error:", error);
