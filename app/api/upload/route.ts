@@ -40,8 +40,8 @@ export async function POST(request: Request) {
         ContentType: file.type,
       },
       // Optimize multipart upload
-      partSize: 10 * 1024 * 1024, // Increased to 10MB parts for faster uploads
-      queueSize: 8, // Increased concurrent uploads
+      partSize: 1 * 1024 * 1024, // Increased to 10MB parts for faster uploads
+      queueSize: 4, // Increased concurrent uploads
       leavePartsOnError: false,
     });
 
