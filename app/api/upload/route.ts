@@ -1,5 +1,5 @@
-import { S3Client } from "@aws-sdk/client-s3";
-import { Upload } from "@aws-sdk/lib-storage";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { NextResponse } from "next/server";
 
 const awsRegion = process.env.NEXT_PUBLIC_AWS_REGION;
@@ -17,42 +17,32 @@ const s3Client = new S3Client({
     accessKeyId: awsAccessID,
     secretAccessKey: awsSecretID,
   },
-  useAccelerateEndpoint: true,
-  logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }, // Disable SDK logging
 });
 
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
+    const { filename, contentType } = await request.json();
+    const key = `uploads/${Date.now()}-${filename}`;
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    }
-
-    const key = `uploads/${Date.now()}-${file.name}`;
-    const upload = new Upload({
-      client: s3Client,
-      params: {
-        Bucket: awsBucket,
-        Key: key,
-        Body: file,
-        ContentType: file.type,
-      },
-      // Optimize multipart upload
-      partSize: 1 * 1024 * 1024, // Increased to 10MB parts for faster uploads
-      queueSize: 4, // Increased concurrent uploads
-      leavePartsOnError: false,
+    const command = new PutObjectCommand({
+      Bucket: awsBucket,
+      Key: key,
+      ContentType: contentType,
     });
 
-    await upload.done();
+    const signedUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: 3600, // URL expires in 1 hour
+    });
 
     return NextResponse.json({
-      message: "Upload successful",
-      url: `https://${awsBucket}.s3-accelerate.amazonaws.com/${key}`,
+      uploadUrl: signedUrl,
+      fileKey: key,
     });
   } catch (error) {
-    console.error("Upload error:", error);
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    console.error("Error generating signed URL:", error);
+    return NextResponse.json(
+      { error: "Failed to generate upload URL" },
+      { status: 500 }
+    );
   }
 }

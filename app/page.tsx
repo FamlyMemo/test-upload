@@ -12,17 +12,35 @@ export default function Home() {
     setUploading(true);
 
     try {
-      const formData = new FormData(e.currentTarget);
-      const response = await fetch("/api/upload", {
+      const fileInput = e.currentTarget.elements.namedItem(
+        "file"
+      ) as HTMLInputElement;
+      const file = fileInput.files?.[0];
+
+      if (!file) return;
+
+      // Get presigned URL
+      const urlResponse = await fetch("/api/upload", {
         method: "POST",
-        body: formData,
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+        }),
+      });
+      const { uploadUrl, fileKey } = await urlResponse.json();
+
+      // Upload directly to S3
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: {
+          "Content-Type": file.type,
+        },
       });
 
-      const data = await response.json();
-      if (response.ok) {
-        setUploadedUrl(data.url);
-      } else {
-        alert(data.error);
+      if (uploadResponse.ok) {
+        const finalUrl = `https://${process.env.NEXT_PUBLIC_AWS_BUCKET_NAME}.s3.${process.env.NEXT_PUBLIC_AWS_REGION}.amazonaws.com/${fileKey}`;
+        setUploadedUrl(finalUrl);
       }
     } catch (error: unknown) {
       alert("Upload failed");
